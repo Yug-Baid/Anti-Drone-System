@@ -4,13 +4,14 @@ import InfoPanel from "../components/InfoPanel.jsx";
 const AttackPhase = {
   INACTIVE: 'INACTIVE',
   NORMAL_FLIGHT: 'NORMAL_FLIGHT',
-  ATTACK_INJECT: 'ATTACK_INJECT',
-  HIJACKED: 'HIJACKED',
+  ATTACK_INJECT: 'ATTACK_INJECT', // Attack starts, packets are sent
+  HIJACKED: 'HIJACKED',         // Drone follows new commands, operator sees jitter
   COMPLETED: 'COMPLETED'
 };
 
 const SIMULATION_SPEED = 50; // ms per tick
 const DRONE_SPEED = 2;
+const JITTER_AMOUNT = 4; // How much the spoofed drone will jitter
 
 export default function DataInjectionSimulation() {
   const world = { width: 1000, height: 650 };
@@ -21,7 +22,6 @@ export default function DataInjectionSimulation() {
   const [reportedDrone, setReportedDrone] = useState(initialDroneState); // "Ghost" drone, what the operator sees
   const [radioTower] = useState({ x: 850, y: 325 });
   
-  // The drone's legitimate mission path
   const [waypoints, setWaypoints] = useState([
     { x: 300, y: 100 },
     { x: 500, y: 300 },
@@ -43,8 +43,15 @@ export default function DataInjectionSimulation() {
   const [dronePath, setDronePath] = useState([]);
   const [reportedPath, setReportedPath] = useState([]);
   
+  // *** NEW STATE FOR VISUALS ***
+  const [dataPackets, setDataPackets] = useState([]);
+  
   const [digitalFootprints, setDigitalFootprints] = useState([]);
   const simulationRef = useRef(null);
+  
+  // Refs to hold latest positions for logging
+  const latestDronePos = useRef(initialDroneState);
+  const latestReportedPos = useRef(initialDroneState);
 
   const formatCoords = (x, y) => `(${Math.round(x)}, ${Math.round(y)})`;
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -62,9 +69,12 @@ export default function DataInjectionSimulation() {
     setReportedDrone(initialDroneState);
     setDronePath([initialDroneState]);
     setReportedPath([initialDroneState]);
+    latestDronePos.current = initialDroneState;
+    latestReportedPos.current = initialDroneState;
     setCurrentWaypointIdx(0);
     setReportedWaypointIdx(0);
     setDigitalFootprints([]);
+    setDataPackets([]); // Clear packets
     setAttackPhase(AttackPhase.INACTIVE);
     setStatus("Simulation reset. Press play to start.");
   }, []);
@@ -87,15 +97,34 @@ export default function DataInjectionSimulation() {
     return { ...from, x: from.x + (dx / d) * speed, y: from.y + (dy / d) * speed };
   };
 
+  // *** NEW FUNCTION to create a data packet visual ***
+  const spawnDataPacket = () => {
+    const id = Math.random();
+    const newPacket = {
+      id,
+      x: radioTower.x,
+      y: radioTower.y,
+      // Target the drone's *current* position
+      targetX: latestDronePos.current.x,
+      targetY: latestDronePos.current.y
+    };
+    setDataPackets(prev => [...prev, newPacket]);
+    
+    // Remove packet after 1 second
+    setTimeout(() => {
+      setDataPackets(prev => prev.filter(p => p.id !== id));
+    }, 1000);
+  };
+
   const runSimulationTick = useCallback(() => {
     const newTime = simulationTime + SIMULATION_SPEED;
     setSimulationTime(newTime);
 
     let nextPhase = attackPhase;
-    if (newTime > 15000) { nextPhase = AttackPhase.COMPLETED; } // End sim
+    if (newTime > 15000) { nextPhase = AttackPhase.COMPLETED; }
     else if (newTime > 8000) { nextPhase = AttackPhase.HIJACKED; }
     else if (newTime > 5000) { nextPhase = AttackPhase.ATTACK_INJECT; }
-    else { nextPhase = AttackPhase.NORMAL_FLIGHT; }
+    else if (newTime > 500) { nextPhase = AttackPhase.NORMAL_FLIGHT; } // Give time for init
 
     // --- PHASE TRANSITIONS ---
     if (nextPhase !== attackPhase) {
@@ -108,10 +137,11 @@ export default function DataInjectionSimulation() {
         case AttackPhase.HIJACKED:
           setStatus("Phase 3: Drone is following malicious commands. Attacker is spoofing telemetry.");
           addFootprint('SPOOF', 'CMD_OVERRIDE ACK. Drone path diverted. Initiating telemetry spoof.');
+          setDataPackets([]); // Stop the packet storm
           break;
         case AttackPhase.COMPLETED:
            setStatus("Attack Complete: The drone is at the attacker's location, but the operator believes the mission is nominal.");
-           addFootprint('ATTACK', `ACTUAL DRONE LOCATION: ${formatCoords(drone.x, drone.y)}`);
+           addFootprint('ATTACK', `ACTUAL DRONE LOCATION: ${formatCoords(latestDronePos.current.x, latestDronePos.current.y)}`);
            addFootprint('SPOOF', `[FAKE TELEMETRY] Arrived at Waypoint #${reportedWaypointIdx}.`);
            setIsPlaying(false);
           break;
@@ -121,11 +151,17 @@ export default function DataInjectionSimulation() {
 
     // --- MOVEMENT & LOGIC ---
 
-    // 1. Reported (Ghost) Drone: Always follows the mission plan. This is what the operator sees.
+    // 1. Reported (Ghost) Drone: Always follows the mission plan.
     setReportedDrone(prev => {
       if (reportedWaypointIdx >= waypoints.length) return prev;
       const targetWp = waypoints[reportedWaypointIdx];
-      const newPos = moveTowards(prev, targetWp, DRONE_SPEED);
+      let newPos = moveTowards(prev, targetWp, DRONE_SPEED);
+      
+      // *** MODIFICATION: Add jitter if hijacked ***
+      if (nextPhase >= AttackPhase.HIJACKED) {
+        newPos.x += (Math.random() - 0.5) * JITTER_AMOUNT;
+        newPos.y += (Math.random() - 0.5) * JITTER_AMOUNT;
+      }
       
       if (dist(newPos, targetWp) < DRONE_SPEED) {
         setReportedWaypointIdx(i => i + 1);
@@ -134,6 +170,7 @@ export default function DataInjectionSimulation() {
         }
       }
       setReportedPath(path => [...path, newPos]);
+      latestReportedPos.current = newPos; // Update ref
       return newPos;
     });
 
@@ -153,19 +190,26 @@ export default function DataInjectionSimulation() {
         newPos = moveTowards(prev, maliciousTarget, DRONE_SPEED);
       }
       setDronePath(path => [...path, newPos]);
+      latestDronePos.current = newPos; // Update ref
       return newPos;
     });
 
     // 3. Log Telemetry
     if (newTime % 1000 < SIMULATION_SPEED) { // Log every second
       if (nextPhase === AttackPhase.NORMAL_FLIGHT) {
-        addFootprint('AUTH', `Telemetry: POS=${formatCoords(drone.x, drone.y)}, WP_TGT=${currentWaypointIdx}`);
+        addFootprint('AUTH', `Telemetry: POS=${formatCoords(latestDronePos.current.x, latestDronePos.current.y)}, WP_TGT=${currentWaypointIdx}`);
       } else if (nextPhase >= AttackPhase.HIJACKED) {
-         addFootprint('SPOOF', `[FAKE TELEMETRY] POS=${formatCoords(reportedDrone.x, reportedDrone.y)}, WP_TGT=${reportedWaypointIdx}`);
+         // *** MODIFICATION: Add jitter info to log ***
+         addFootprint('SPOOF', `[FAKE TELEMETRY] POS=${formatCoords(latestReportedPos.current.x, latestReportedPos.current.y)}, WP_TGT=${reportedWaypointIdx} (Signal Jitter)`);
       }
     }
+    
+    // 4. *** NEW: Spawn data packets during injection phase ***
+    if (nextPhase === AttackPhase.ATTACK_INJECT && newTime % 200 < SIMULATION_SPEED) {
+        spawnDataPacket();
+    }
 
-  }, [simulationTime, attackPhase, addFootprint, waypoints, currentWaypointIdx, reportedWaypointIdx, drone.x, drone.y, reportedDrone.x, reportedDrone.y, maliciousTarget]);
+  }, [simulationTime, attackPhase, addFootprint, waypoints, currentWaypointIdx, reportedWaypointIdx, maliciousTarget]);
 
   useEffect(() => {
     if (isPlaying && attackPhase !== AttackPhase.COMPLETED) {
@@ -219,6 +263,21 @@ export default function DataInjectionSimulation() {
               <span>{idx + 1}</span>
             </div>
           ))}
+          
+          {/* *** NEW: Data Packets Visualization *** */}
+          {dataPackets.map(packet => (
+            <div 
+                key={packet.id}
+                className="data-packet"
+                style={{
+                    left: packet.x,
+                    top: packet.y,
+                    // Animate motion towards the drone's position when packet was spawned
+                    '--target-x': `${packet.targetX}px`, 
+                    '--target-y': `${packet.targetY}px`
+                }}
+            />
+          ))}
 
           {/* Drones */}
           <div className="drone spoofed-ghost" style={{ left: reportedDrone.x, top: reportedDrone.y }}>
@@ -230,7 +289,8 @@ export default function DataInjectionSimulation() {
 
           {/* Paths */}
           <svg className="path-svg">
-            {attackPhase >= AttackPhase.ATTACK_INJECT && (
+            {/* Signal from attacker to drone (now only shows during hijack) */}
+            {attackPhase >= AttackPhase.HIJACKED && (
                 <line x1={drone.x + 14} y1={drone.y + 14} x2={radioTower.x} y2={radioTower.y} className="spoofing-signal" />
             )}
             <polyline points={reportedPath.map(p => `${p.x + 14},${p.y + 14}`).join(' ')} className="spoofed-path" />
@@ -244,12 +304,12 @@ export default function DataInjectionSimulation() {
         status={status}
         digitalFootprints={digitalFootprints}
         liveCoords={{
-          actual: formatCoords(drone.x, drone.y),
-          perceived: formatCoords(reportedDrone.x, reportedDrone.y),
+          actual: formatCoords(latestDronePos.current.x, latestDronePos.current.y),
+          perceived: formatCoords(latestReportedPos.current.x, latestReportedPos.current.y),
         }}
         signalStrengths={{
-          satellite: (attackPhase < AttackPhase.ATTACK_INJECT ? 100 : 95), // Signal is fine
-          spoofing: (attackPhase >= AttackPhase.ATTACK_INJECT ? 100 : 0), // Represents the network takeover
+          satellite: (attackPhase < AttackPhase.ATTACK_INJECT ? 100 : 95),
+          spoofing: (attackPhase >= AttackPhase.ATTACK_INJECT ? 100 : 0),
         }}
       />
     </div>

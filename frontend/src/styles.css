@@ -747,3 +747,438 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   opacity: 0.6;
 }
 
+/* --- Styles for MassRedirectionSimulation --- */
+
+/* Control panel slider */
+.playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #ccc;
+}
+
+.slider-control input[type="range"] {
+  width: 120px;
+}
+
+/* Anti-Drone Tower */
+.anti-drone-tower {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+}
+
+.anti-drone-tower .tower-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.anti-drone-tower span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #00bfff; /* Deep sky blue */
+  background: rgba(0, 0, 0, 0.5);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* The detection radius */
+.anti-drone-tower .tower-radius {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed #00bfff;
+  background: rgba(0, 191, 255, 0.1);
+  z-index: -1;
+  animation: pulse 4s infinite ease-in-out;
+}
+
+/* Safe Zone */
+.safe-zone-location {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 255, 127, 0.15); /* Spring green */
+  border: 2px dashed #00ff7f;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+.safe-zone-location span {
+  font-size: 14px;
+  font-weight: 700;
+  color: #00ff7f;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
+}
+
+/* Drone status visuals */
+.drone.redirected .body,
+.drone.safe .body {
+  filter: grayscale(100%) brightness(1.5) drop-shadow(0 0 5px #00bfff);
+}
+
+.drone.safe .body {
+  opacity: 0.6;
+}
+
+
+/* --- Styles for DataInjectionSimulation (New Visuals) --- */
+
+@keyframes packet-fly {
+  from {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 1;
+    left: var(--start-x, 50%);
+    top: var(--start-y, 50%);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0;
+    left: var(--target-x);
+    top: var(--target-y);
+  }
+}
+
+.data-packet {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ff4136; /* Red */
+  border-radius: 50%;
+  z-index: 100;
+  opacity: 0;
+  --start-x: 850px; /* Attacker X */
+  --start-y: 325px; /* Attacker Y */
+  animation: packet-fly 1s ease-in-out;
+  box-shadow: 0 0 8px #ff4136;
+}
+
+/* This is the existing class, but the jitter will now be applied */
+.drone.spoofed-ghost {
+  z-index: 15;
+  opacity: 0.7;
+}
+
+.drone.spoofed-ghost .body {
+  filter: grayscale(1) drop-shadow(0 0 4px #aaa);
+  /* The 'jitter' is applied via inline style, but this ensures it's on top */
+}
+
+/* ... (all your existing styles) ... */
+
+/* --- Styles for MassRedirectionSimulation --- */
+
+/* Control panel slider */
+.playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap; /* Added for responsiveness */
+}
+
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #ccc;
+}
+
+.slider-control input[type="range"] {
+  width: 120px;
+}
+
+/* Anti-Drone Tower */
+.anti-drone-tower {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+}
+
+.anti-drone-tower .tower-icon {
+  font-size: 32px;
+  line-height: 1;
+  filter: drop-shadow(0 0 8px #00bfff);
+}
+
+.anti-drone-tower span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #00bfff; /* Deep sky blue */
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* The detection radius (Inner solid circle) */
+.anti-drone-tower .tower-radius {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid #00bfff;
+  background: rgba(0, 191, 255, 0.1);
+  box-shadow: 0 0 15px rgba(0, 191, 255, 0.5), inset 0 0 10px rgba(0, 191, 255, 0.3);
+  z-index: -1;
+  animation: pulse 4s infinite ease-in-out;
+}
+
+/* *** NEW: Outer Dotted Fence *** */
+.detection-fence {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed #00bfff;
+  background: none;
+  z-index: -2;
+  animation: pulse-faint 3s infinite ease-in-out;
+}
+
+@keyframes pulse-faint {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.7;
+  }
+}
+
+
+/* Safe Zone */
+.safe-zone-location {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 255, 127, 0.15); /* Spring green */
+  border: 2px dashed #00ff7f;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  box-shadow: 0 0 15px rgba(0, 255, 127, 0.5), inset 0 0 10px rgba(0, 255, 127, 0.3);
+}
+.safe-zone-location span {
+  font-size: 14px;
+  font-weight: 700;
+  color: #00ff7f;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
+}
+
+/* *** NEW: Glitch animation for redirected drones *** */
+@keyframes glitch {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-2px, -1px); }
+  20% { transform: translate(1px, 2px); }
+  30% { transform: translate(2px, -1px); }
+  40% { transform: translate(-1px, 1px); }
+  50% { transform: translate(-2px, 2px); }
+  60% { transform: translate(1px, -2px); }
+  70% { transform: translate(-1px, -1px); }
+  80% { transform: translate(2px, 1px); }
+  90% { transform: translate(-1px, 2px); }
+}
+
+/* Drone status visuals */
+.drone.redirected .body {
+  /* The existing effect */
+  filter: grayscale(100%) brightness(1.5) drop-shadow(0 0 5px #00bfff);
+  /* The new glitch effect */
+  animation: glitch 0.3s infinite;
+}
+
+.drone.safe .body {
+  filter: grayscale(100%) brightness(1.5) drop-shadow(0 0 5px #00bfff);
+  opacity: 0.6;
+}
+
+
+/* --- Styles for DataInjectionSimulation (New Visuals) --- */
+/* ... (styles from previous response) ... */
+@keyframes packet-fly {
+  from {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 1;
+    left: var(--start-x, 50%);
+    top: var(--start-y, 50%);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0;
+    left: var(--target-x);
+    top: var(--target-y);
+  }
+}
+
+.data-packet {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ff4136; /* Red */
+  border-radius: 50%;
+  z-index: 100;
+  opacity: 0;
+  --start-x: 850px; /* Attacker X */
+  --start-y: 325px; /* Attacker Y */
+  animation: packet-fly 1s ease-in-out;
+  box-shadow: 0 0 8px #ff4136;
+}
+
+.drone.spoofed-ghost {
+  z-index: 15;
+  opacity: 0.7;
+}
+
+.drone.spoofed-ghost .body {
+  filter: grayscale(1) drop-shadow(0 0 4px #aaa);
+}
+
+/* ... (all your existing styles for DroneSimulation) ... */
+
+.simulation-layout {
+  display: flex;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  gap: 20px;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.simulation-world-container {
+  flex: 3; /* Takes up more space */
+  min-width: 600px; /* Min width before wrapping */
+  position: relative;
+}
+
+.simulation-world {
+  background: #282c34;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #444;
+  max-width: 800px; /* Constrain world size */
+  margin: 0 auto; /* Center the world */
+}
+
+/* ... (rest of your .simulation-world styles) ... */
+
+.drone {
+  position: absolute;
+  transition: filter 0.3s ease;
+}
+.drone-body {
+  font-size: 32px; /* Slightly smaller for 40x40 */
+  line-height: 40px;
+  text-align: center;
+  transition: transform 0.1s ease;
+}
+.drone-shadow {
+  position: absolute;
+  width: 70%;
+  height: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  bottom: -5px;
+  left: 15%;
+  filter: blur(4px);
+  z-index: -1;
+}
+
+.drone.spoofed .drone-body {
+  filter: grayscale(1) brightness(1.2) drop-shadow(0 0 5px #0af);
+  animation: glitch 0.3s infinite; /* Re-using the glitch from styles.css */
+}
+.drone.spoofed .drone-shadow {
+  display: none; /* Hide shadow when spoofed */
+}
+
+/* ... (your .safe-zone styles) ... */
+
+.danger-zone {
+  position: absolute;
+  background: rgba(255, 65, 54, 0.2); /* #ff4136 */
+  border-radius: 50%;
+  border: 2px solid #ff4136;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ff4136;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 0 0 20px rgba(255, 65, 54, 0.6),
+    inset 0 0 15px rgba(255, 65, 54, 0.4);
+  animation: pulse 3s infinite ease-in-out;
+}
+
+/* *** NEW: Dotted Danger Fence *** */
+.danger-fence {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px dashed #ff4136;
+  background: none;
+  z-index: 1; /* Below drone, above zone */
+  animation: pulse-faint-red 2s infinite ease-in-out;
+}
+
+@keyframes pulse-faint-red {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.01);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+}
+
+
+/* ... (rest of your styles for log-panel, dashboard, etc.) ... */
+
+.reset-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 50;
+  background: #4a505a;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  transition: background 0.2s ease;
+}
+.reset-button:hover {
+  background: #5a606a;
+}

@@ -4,7 +4,9 @@ import Landing from "./pages/Landing.jsx";
 import DroneSimulation from "./pages/DroneSimulation.jsx";
 import SpoofingInfo from "./pages/SpoofingInfo.jsx";
 import GnssSpoofingSimulation from "./pages/GnssSpoofingSimulation.jsx";
-import DataInjectionSimulation from "./pages/DataInjectionSimulation.jsx"; // 1. IMPORT THE NEW PAGE
+import DataInjectionSimulation from "./pages/DataInjectionSimulation.jsx";
+// 1. IMPORT THE NEW SIMULATION
+import MassRedirectionSimulation from "./pages/MassRedirectionSimulation.jsx"; 
 import "./styles.css";
 
 export default function App() {
@@ -16,7 +18,9 @@ export default function App() {
           <Link to="/">Home</Link>
           <Link to="/simulate">Simulation</Link>
           <Link to="/gnss-spoofing">GNSS Attack Sim</Link>
-          <Link to="/data-injection">Data Injection Sim</Link> {/* 2. ADD THE NEW LINK */}
+          <Link to="/data-injection">Data Injection Sim</Link>
+          {/* 2. ADD THE NEW LINK */}
+          <Link to="/mass-redirection">Mass Redirection Sim</Link>
           <Link to="/spoofing-info">Spoofing Types</Link>
           <a href="http://localhost:5000/api/logs" target="_blank" rel="noreferrer">Backend Logs</a>
         </nav>
@@ -27,7 +31,9 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/simulate" element={<DroneSimulation />} />
           <Route path="/gnss-spoofing" element={<GnssSpoofingSimulation />} />
-          <Route path="/data-injection" element={<DataInjectionSimulation />} /> {/* 3. ADD THE NEW ROUTE */}
+          <Route path="/data-injection" element={<DataInjectionSimulation />} />
+          {/* 3. ADD THE NEW ROUTE */}
+          <Route path="/mass-redirection" element={<MassRedirectionSimulation />} />
           <Route path="/spoofing-info" element={<SpoofingInfo />} />
         </Routes>
       </main>
