@@ -15,13 +15,21 @@
 
 /* Base */
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 700px at 10% -10%, #1a2340 0%, #0b1020 50%, #070b17 100%); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+html, body, #root { 
+  height: 100%; 
+  margin: 0; 
+  background: radial-gradient(1200px 700px at 10% -10%, #1a2340 0%, #0b1020 50%, #070b17 100%); 
+  color: var(--text); 
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial; 
+  -webkit-text-size-adjust: 100%; /* Prevent font scaling on mobile */
+}
 
 /* Header / Footer */
 .app-header {
   height: 58px; display:flex; align-items:center; justify-content:space-between;
   padding: 0 18px; background: rgba(17,24,43,0.85); border-bottom: 1px solid #1f2947;
   backdrop-filter: blur(6px); position: sticky; top:0; z-index: 10;
+  flex-wrap: wrap; /* Allow wrapping on small screens */
 }
 .brand { font-weight: 800; letter-spacing: .3px; }
 .nav a { margin-left: 12px; padding: 6px 10px; border-radius: 8px; background: #0e152a; color: var(--muted); text-decoration: none; }
@@ -38,8 +46,9 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
 .stage-card {
   background: linear-gradient(180deg, #0f1730 0%, #0c1327 100%);
   border: 1px solid #1b2a53; border-radius: 16px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  overflow: hidden; /* Ensure padding is respected */
 }
-.stage-head { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
+.stage-head { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
 .title { font-weight: 700; letter-spacing: .2px; color: #cfe3ff; }
 .badge { padding: 6px 10px; border-radius: 999px; font-size: 12px; letter-spacing: .4px; }
 .badge.good { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.25); color: #a8f5c3; }
@@ -49,7 +58,17 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
 .world {
   position: relative; border-radius: 14px; overflow: hidden;
   border: 1px solid #24345f; background: radial-gradient(600px 280px at 0% 0%, #0e1838, #0b1229 60%, #091024 100%);
-  min-height: 520px;
+  
+  /* --- RESPONSIVE OVERRIDES --- */
+  /* Force override of inline style to be responsive */
+  width: 100% !important; 
+  max-width: 1000px; /* This is the original inline width */
+  margin: 0 auto; /* Center it */
+  
+  /* Force height to be automatic and maintain aspect ratio */
+  height: auto !important; 
+  aspect-ratio: 1000 / 650; /* Based on the inline 1000x650 */
+  min-height: 0; /* Override the desktop min-height */
 }
 
 /* Grid */
@@ -90,8 +109,16 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   position:absolute; display:flex; align-items:center; justify-content:center; user-select:none;
   transition: left .08s linear, top .08s linear, transform .2s ease;
   z-index: 8;
+  /* Adjust size based on relative transform, not fixed pixels */
+  width: 28px; 
+  height: 28px;
 }
-.drone .body { font-size: 22px; filter: drop-shadow(0 4px 12px rgba(0,0,0,.35)); }
+.drone .body { 
+  font-size: 22px; 
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.35)); 
+  line-height: 1; /* Helps center emoji */
+  display: block;
+}
 .drone .shadow { position:absolute; bottom:-6px; width:70%; height:8px; border-radius:999px; background: rgba(0,0,0,.35); filter: blur(3px); }
 .drone.spoofed { transform: scale(1.06) rotate(2deg); }
 
@@ -194,29 +221,6 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   100% { opacity: 0;  transform: scale(1.25); }
 }
 
-/* Siren banner (already added earlier; keep if present) */
-.siren-banner {
-  position: absolute;
-  right: 12px;
-  top: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(255, 91, 91, 0.14);
-  border: 1px solid rgba(255, 91, 91, 0.35);
-  color: #ffe5e5;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(239,68,68,.18);
-  z-index: 10;
-  backdrop-filter: blur(6px);
-  animation: sirenPulse 1s infinite;
-}
-.siren-icon { width: 18px; height: 18px; border-radius: 3px; position: relative; background: #ef4444; box-shadow: 0 0 12px rgba(239,68,68,.8); }
-.siren-icon::before, .siren-icon::after { content: ""; position: absolute; inset: -6px; border-radius: 6px; border: 2px solid rgba(239,68,68,.45); animation: sirenRing 1.4s infinite ease-out; }
-.siren-icon::after { inset: -12px; animation-delay: .35s; }
-@keyframes sirenPulse { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
-@keyframes sirenRing { 0%{opacity:.9;transform:scale(.85)} 100%{opacity:0;transform:scale(1.25)} }
 
 /* Destruction overlay */
 .destroy-overlay {
@@ -316,14 +320,6 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   box-shadow: 0 8px 24px rgba(0,0,0,.35);
 }
 
-@keyframes blastExpand { 0%{transform:scale(.2);opacity:1} 100%{transform:scale(8);opacity:0} }
-@keyframes shockwaveExpand { 0%{transform:scale(.3);opacity:.9} 100%{transform:scale(7);opacity:0} }
-
-/* Optional: fade the drone right as it's destroyed */
-.drone.destroyed .body { animation: dronePop .6s ease-out forwards; }
-.drone.destroyed .shadow { animation: shadowFade .6s ease-out forwards; }
-@keyframes dronePop { 0%{transform:scale(1) rotate(0)} 100%{transform:scale(0) rotate(15deg); opacity:0} }
-@keyframes shadowFade { 0%{opacity:1} 100%{opacity:0} }
 
 /* === Landing / Hero === */
 .landing { display: grid; gap: 24px; }
@@ -389,7 +385,8 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   grid-template-columns: 1.2fr 1fr;
   gap: 16px;
 }
-@media (max-width: 980px) { .info-grid { grid-template-columns: 1fr; } }
+/* This media query already exists and is correct for stacking */
+@media (max-width: 980px) { .info-grid { grid-template-columns: 1fr; } } 
 
 .card {
   background: linear-gradient(180deg, #0f1730 0%, #0c1327 100%);
@@ -401,7 +398,7 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
 
 .info-title { margin: 0 0 8px; color: #cfe3ff; font-weight: 800; }
 .info-text { margin: 0; color: #d7e6ff; line-height: 1.6; }
-.info-meta { margin-top: 12px; color: #a8b3d2; display:flex; gap:8px; align-items:center; }
+.info-meta { margin-top: 12px; color: #a8b3d2; display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
 .tag {
   padding: 2px 8px; border-radius: 999px; font-size: 12px;
   background: rgba(91,156,255,.14); border: 1px solid rgba(91,156,255,.32); color:#cfe3ff;
@@ -556,6 +553,7 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
 
 .stage-card.large {
   flex: 1 1 1020px; /* Allow it to grow, but base it on the larger world size */
+  min-width: 300px; /* Allow it to shrink */
 }
 
 /* --- INFO PANEL STYLES --- */
@@ -565,7 +563,8 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   border-radius: 8px;
   padding: 20px;
   color: #c0c5ce;
-  max-width: 500px;
+  max-width: 500px; /* Desktop max-width */
+  min-width: 300px; /* Mobile min-width */
 }
 
 .info-section {
@@ -628,6 +627,7 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   margin-left: auto;
   display: flex;
   gap: 10px;
+  flex-wrap: wrap; /* Allow controls to wrap */
 }
 
 .control-button {
@@ -639,6 +639,8 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   background-color: #3498db;
   color: white;
   transition: background-color 0.2s;
+  flex-grow: 1; /* Allow buttons to grow */
+  text-align: center;
 }
 
 .control-button:hover {
@@ -670,6 +672,8 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   justify-content: space-between;
   margin-bottom: 8px;
   font-size: 14px;
+  flex-wrap: wrap; /* Allow wrapping */
+  gap: 5px;
 }
 .telemetry-item:last-child {
   margin-bottom: 0;
@@ -690,6 +694,7 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
+  flex-wrap: wrap; /* Allow wrapping */
 }
 .signal-item:last-child {
   margin-bottom: 0;
@@ -712,6 +717,7 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   background-color: #2c3e50;
   border-radius: 6px;
   overflow: hidden;
+  min-width: 100px; /* Ensure bar is visible */
 }
 
 .signal-bar-fill {
@@ -754,139 +760,6 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.slider-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: #ccc;
-}
-
-.slider-control input[type="range"] {
-  width: 120px;
-}
-
-/* Anti-Drone Tower */
-.anti-drone-tower {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  z-index: 10;
-}
-
-.anti-drone-tower .tower-icon {
-  font-size: 32px;
-  line-height: 1;
-}
-
-.anti-drone-tower span {
-  font-size: 12px;
-  font-weight: 600;
-  color: #00bfff; /* Deep sky blue */
-  background: rgba(0, 0, 0, 0.5);
-  padding: 2px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-/* The detection radius */
-.anti-drone-tower .tower-radius {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 2px dashed #00bfff;
-  background: rgba(0, 191, 255, 0.1);
-  z-index: -1;
-  animation: pulse 4s infinite ease-in-out;
-}
-
-/* Safe Zone */
-.safe-zone-location {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 255, 127, 0.15); /* Spring green */
-  border: 2px dashed #00ff7f;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5;
-}
-.safe-zone-location span {
-  font-size: 14px;
-  font-weight: 700;
-  color: #00ff7f;
-  text-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
-}
-
-/* Drone status visuals */
-.drone.redirected .body,
-.drone.safe .body {
-  filter: grayscale(100%) brightness(1.5) drop-shadow(0 0 5px #00bfff);
-}
-
-.drone.safe .body {
-  opacity: 0.6;
-}
-
-
-/* --- Styles for DataInjectionSimulation (New Visuals) --- */
-
-@keyframes packet-fly {
-  from {
-    transform: translate(-50%, -50%) scale(0.8);
-    opacity: 1;
-    left: var(--start-x, 50%);
-    top: var(--start-y, 50%);
-  }
-  to {
-    transform: translate(-50%, -50%) scale(0.3);
-    opacity: 0;
-    left: var(--target-x);
-    top: var(--target-y);
-  }
-}
-
-.data-packet {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: #ff4136; /* Red */
-  border-radius: 50%;
-  z-index: 100;
-  opacity: 0;
-  --start-x: 850px; /* Attacker X */
-  --start-y: 325px; /* Attacker Y */
-  animation: packet-fly 1s ease-in-out;
-  box-shadow: 0 0 8px #ff4136;
-}
-
-/* This is the existing class, but the jitter will now be applied */
-.drone.spoofed-ghost {
-  z-index: 15;
-  opacity: 0.7;
-}
-
-.drone.spoofed-ghost .body {
-  filter: grayscale(1) drop-shadow(0 0 4px #aaa);
-  /* The 'jitter' is applied via inline style, but this ensures it's on top */
-}
-
-/* ... (all your existing styles) ... */
-
-/* --- Styles for MassRedirectionSimulation --- */
-
-/* Control panel slider */
-.playback-controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
   flex-wrap: wrap; /* Added for responsiveness */
 }
 
@@ -896,10 +769,14 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   gap: 10px;
   font-size: 14px;
   color: #ccc;
+  flex-basis: 200px; /* Give it space */
+  flex-grow: 1;
 }
 
 .slider-control input[type="range"] {
-  width: 120px;
+  width: 100%; /* Make slider responsive */
+  max-width: 120px;
+  min-width: 80px;
 }
 
 /* Anti-Drone Tower */
@@ -1091,6 +968,7 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
 .drone {
   position: absolute;
   transition: filter 0.3s ease;
+  /* Size is set in .drone definition near top */
 }
 .drone-body {
   font-size: 32px; /* Slightly smaller for 40x40 */
@@ -1183,78 +1061,161 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
   background: #5a606a;
 }
 
-/* === ADD THESE STYLES TO frontend/src/styles.css === */
+/* ===============================================
+--- NEW: RESPONSIVE & MOBILE STYLES ---
+===============================================
+*/
 
-/* --- Digital Footprint Marker --- */
-@keyframes footprintPulse {
-  0% {
-    transform: translate(-50%, -50%) scale(0.8);
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
-    opacity: 0.8;
+@media (max-width: 1200px) {
+  /* Stack simulation and info panel */
+  .gnss-layout {
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
   }
-  70% {
-    transform: translate(-50%, -50%) scale(1.2);
-    box-shadow: 0 0 10px 15px rgba(255, 255, 255, 0);
-    opacity: 1;
+  .stage-card.large {
+    flex-basis: auto; /* Allow card to shrink */
   }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.8;
+  .info-panel {
+    flex-basis: auto; /* Allow panel to shrink */
+    width: 100%;
+    max-width: 100%; /* Take full width */
   }
 }
 
-.footprint-marker {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  z-index: 100;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: bold;
-  color: white;
-  animation: footprintPulse 1.5s infinite ease-out;
-}
-.footprint-marker::before {
-  content: "X";
+@media (max-width: 980px) {
+  /* This breakpoint already handles .info-grid stacking */
+  .hero-inner {
+    padding: 20px;
+  }
 }
 
-/* Status-specific colors for markers */
-.footprint-marker.safe {
-  background-color: rgba(34, 197, 94, 0.5); /* var(--ok) */
-  border: 2px solid rgba(34, 197, 94, 1);
-}
-.footprint-marker.actual {
-  background-color: rgba(239, 68, 68, 0.5); /* var(--danger) */
-  border: 2px solid rgba(239, 68, 68, 1);
-}
-.footprint-marker.reported {
-  background-color: rgba(155, 89, 182, 0.5); /* Spoof purple */
-  border: 2px solid rgba(155, 89, 182, 1);
+@media (max-width: 768px) {
+  .app-main, .gnss-layout {
+    padding: 12px;
+  }
+  .hero-inner {
+    padding: 16px;
+  }
+
+  /* Stack hero controls cleanly */
+  .hero-controls {
+    flex-direction: column;
+    align-items: stretch; /* Make children full-width */
+  }
+  .select, .btn {
+    min-width: 100%; /* Make select and button full width */
+  }
+
+  /* Stack header items */
+  .app-header {
+    flex-direction: column;
+    height: auto;
+    padding: 10px;
+    gap: 10px;
+  }
+  .nav {
+    margin-left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  .nav a {
+    flex: 1;
+    text-align: center;
+    margin-left: 4px;
+    margin-right: 4px;
+  }
+  .nav a:first-child { margin-left: 0; }
+  .nav a:last-child { margin-right: 0; }
+
+  /* Reduce padding on cards */
+  .stage-card, .panel, .card {
+    padding: 12px;
+  }
+
+  /* Adjust simulation world aspect ratio for mobile */
+  .world {
+    aspect-ratio: 1000 / 900; /* Taller for mobile */
+  }
+
+  /* Make log panel shorter on mobile */
+  .footprints-log {
+    height: 280px;
+  }
+
+  /* Adjust playback controls to stack */
+  .playback-controls {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  .slider-control {
+    justify-content: space-between;
+  }
+  .slider-control input[type="range"] {
+    max-width: 150px;
+  }
+  .control-button {
+    width: 100%;
+  }
 }
 
-/* --- Glitching Animation (for DataInjection) --- */
-.drone.glitching .body {
-  /* Re-uses the glitch keyframes already in your styles.css */
-  animation: glitch 0.3s infinite;
-}
+@media (max-width: 480px) {
+  .app-main, .gnss-layout {
+    padding: 8px;
+  }
+  .hero-inner {
+    padding: 12px;
+  }
 
-/* --- Pulsing Spoofing Signal (for DataInjection) --- */
-@keyframes pulse-signal {
-  0% { opacity: 0.8; stroke-width: 2; }
-  50% { opacity: 1; stroke-width: 4; }
-  100% { opacity: 0.8; stroke-width: 2; }
-}
+  /* Smaller text on small screens */
+  .hero-title {
+    font-size: 24px;
+  }
+  .hero-sub {
+    font-size: 14px;
+  }
 
-.spoofing-signal {
-  /* ... your existing .spoofing-signal styles ... */
-  stroke: #e74c3c;
-  opacity: 0.8;
-  stroke-width: 2;
-  stroke-linecap: round;
-  /* Add this animation */
-  animation: pulse-signal 1s infinite ease-in-out;
+  .info-title {
+    font-size: 16px;
+  }
+  .info-text, .info-meta, .muted {
+    font-size: 13px;
+  }
+
+  /* Even taller simulation world */
+  .world {
+    aspect-ratio: 1000 / 1100;
+  }
+
+  /* Smaller drone emoji */
+  .drone .body {
+    font-size: 18px;
+  }
+  
+  .target-location, .spoofed-target-location, .safe-zone-location span {
+    font-size: 10px;
+  }
+  .target-location, .spoofed-target-location {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .tower-icon {
+    font-size: 40px;
+  }
+
+  .anti-drone-tower span {
+    font-size: 10px;
+  }
+
+  .log-entry {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .log-timestamp {
+    margin-right: 0;
+  }
 }
