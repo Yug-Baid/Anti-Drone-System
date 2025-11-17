@@ -11,10 +11,12 @@ const AttackPhase = {
   COMPLETED: 'COMPLETED'
 };
 
+const DRONE_SIZE_OFFSET = 14; // Half of drone size (28/2)
+
 export default function GnssSpoofingSimulation() {
   const world = { width: 1000, height: 650 };
 
-  // --- ENTITIES (Adjusted for the larger world) ---
+  // --- ENTITIES ---
   const [drone, setDrone] = useState({ x: 50, y: 325, width: 28, height: 28 });
   const [spoofedDrone, setSpoofedDrone] = useState({ x: 50, y: 325, path: [] });
   const [radioTower] = useState({ x: 500, y: 620 });
@@ -27,10 +29,10 @@ export default function GnssSpoofingSimulation() {
   const [dronePath, setDronePath] = useState([]);
   const [jammingRadius, setJammingRadius] = useState(0);
   const [digitalFootprints, setDigitalFootprints] = useState([]);
+  const [finalPositions, setFinalPositions] = useState([]); // NEW: For footprints
 
   const simulationRef = useRef(null);
   const logCounterRef = useRef(0);
-  // Ref to hold the latest positions for logging, avoiding state lag issues in the interval
   const latestPositionsRef = useRef({});
 
   // --- UTILITY FUNCTIONS ---
@@ -59,6 +61,7 @@ export default function GnssSpoofingSimulation() {
     setDronePath([startPoint]);
     setJammingRadius(0);
     setDigitalFootprints([]);
+    setFinalPositions([]); // NEW: Clear footprints
     logCounterRef.current = 0;
     latestPositionsRef.current = { drone: startPoint, spoofed: startPoint };
     
@@ -77,13 +80,12 @@ export default function GnssSpoofingSimulation() {
       const droneSpeed = 2;
 
       // --- MOVEMENT LOGIC ---
-      // Functional updates are essential to prevent using stale state inside setInterval closures.
       
       // Update REAL drone position
       setDrone(prevDrone => {
         let nextPos;
-        // The drone only deviates its path once the HIJACK phase begins.
-        if (elapsedTime < 8000) { // NORMAL_FLIGHT, JAMMING, SPOOFING phases
+        if (attackPhase === AttackPhase.COMPLETED) return prevDrone; // Stop moving
+        if (elapsedTime < 8000) { 
           nextPos = moveTowards(prevDrone, target, droneSpeed);
         } else { // HIJACKED phase
           nextPos = moveTowards(prevDrone, spoofedTarget, droneSpeed);
@@ -96,7 +98,7 @@ export default function GnssSpoofingSimulation() {
 
       // Update SPOOFED (ghost) drone position
       setSpoofedDrone(prevSpoofed => {
-        // The ghost drone *always* follows the original path, as this is what the drone's compromised system believes is happening.
+        if (attackPhase === AttackPhase.COMPLETED) return prevSpoofed; // Stop moving
         const nextPos = moveTowards(prevSpoofed, target, droneSpeed);
         latestPositionsRef.current.spoofed = { x: nextPos.x, y: nextPos.y };
         
@@ -109,6 +111,9 @@ export default function GnssSpoofingSimulation() {
 
       // --- PHASE & LOGGING LOGIC ---
       setAttackPhase(prevPhase => {
+        // Don't update phase if already completed
+        if (prevPhase === AttackPhase.COMPLETED) return AttackPhase.COMPLETED;
+
         let nextPhase = prevPhase;
         if (elapsedTime > 8000) {
             nextPhase = AttackPhase.HIJACKED;
@@ -120,7 +125,6 @@ export default function GnssSpoofingSimulation() {
             nextPhase = AttackPhase.NORMAL_FLIGHT;
         }
 
-        // Log messages on phase transition (only once)
         if (nextPhase !== prevPhase) {
           switch (nextPhase) {
             case AttackPhase.JAMMING:
@@ -139,12 +143,10 @@ export default function GnssSpoofingSimulation() {
           }
         }
         
-        // Update Jamming Radius visualization
         if (nextPhase === AttackPhase.JAMMING || nextPhase === AttackPhase.SPOOFING) {
           setJammingRadius(r => Math.min(r + 4, 300));
         }
 
-        // Log periodic telemetry
         logCounterRef.current++;
         if (logCounterRef.current % 20 === 0) {
           if (nextPhase === AttackPhase.NORMAL_FLIGHT) {
@@ -154,13 +156,19 @@ export default function GnssSpoofingSimulation() {
           }
         }
         
-        // Check for simulation completion
+        // Check for simulation completion (using spoofed drone)
         if (dist(latestPositionsRef.current.spoofed, target) < 10) {
           nextPhase = AttackPhase.COMPLETED;
           setStatus("Attack Complete: The drone believes it has arrived at the target, but it has been successfully diverted.");
           addFootprint('SPOOF', `Spoofed Destination Reached: ${formatCoords(latestPositionsRef.current.spoofed.x, latestPositionsRef.current.spoofed.y)}`);
           addFootprint('ATTACK', `ACTUAL DRONE LOCATION: ${formatCoords(latestPositionsRef.current.drone.x, latestPositionsRef.current.drone.y)}`);
           clearInterval(simulationRef.current);
+
+          // --- NEW: Set final positions ---
+          setFinalPositions([
+            { id: 'actual', x: latestPositionsRef.current.drone.x, y: latestPositionsRef.current.drone.y, status: 'actual' },
+            { id: 'reported', x: latestPositionsRef.current.spoofed.x, y: latestPositionsRef.current.spoofed.y, status: 'reported' }
+          ]);
         }
 
         return nextPhase;
@@ -207,18 +215,27 @@ export default function GnssSpoofingSimulation() {
                     <div className="shadow" />
                 </div>
 
+                {/* --- NEW: Final Position Footprints --- */}
+                {finalPositions.map(pos => (
+                  <div
+                    key={pos.id}
+                    className={`footprint-marker ${pos.status}`}
+                    style={{ left: pos.x + DRONE_SIZE_OFFSET, top: pos.y + DRONE_SIZE_OFFSET }}
+                  />
+                ))}
+
                 <svg className="path-svg">
                     {attackPhase === AttackPhase.NORMAL_FLIGHT && (
-                    <line x1={drone.x + 14} y1={drone.y + 14} x2={world.width / 2} y2="0" className="satellite-signal" />
+                    <line x1={drone.x + DRONE_SIZE_OFFSET} y1={drone.y + DRONE_SIZE_OFFSET} x2={world.width / 2} y2="0" className="satellite-signal" />
                     )}
                     {attackPhase >= AttackPhase.JAMMING && (
                     <g>
                         <circle cx={radioTower.x} cy={radioTower.y} r={jammingRadius} className="jamming-circle" />
-                        <line x1={drone.x + 14} y1={drone.y + 14} x2={radioTower.x} y2={radioTower.y} className="spoofing-signal" />
+                        <line x1={drone.x + DRONE_SIZE_OFFSET} y1={drone.y + DRONE_SIZE_OFFSET} x2={radioTower.x} y2={radioTower.y} className="spoofing-signal" />
                     </g>
                     )}
-                    <polyline points={spoofedDrone.path.map(p => `${p.x + 14},${p.y + 14}`).join(' ')} className="spoofed-path" />
-                    <polyline points={dronePath.map(p => `${p.x + 14},${p.y + 14}`).join(' ')} className="actual-path" />
+                    <polyline points={spoofedDrone.path.map(p => `${p.x + DRONE_SIZE_OFFSET},${p.y + DRONE_SIZE_OFFSET}`).join(' ')} className="spoofed-path" />
+                    <polyline points={dronePath.map(p => `${p.x + DRONE_SIZE_OFFSET},${p.y + DRONE_SIZE_OFFSET}`).join(' ')} className="actual-path" />
                 </svg>
             </div>
         </div>

@@ -1182,3 +1182,79 @@ html, body, #root { height: 100%; margin: 0; background: radial-gradient(1200px 
 .reset-button:hover {
   background: #5a606a;
 }
+
+/* === ADD THESE STYLES TO frontend/src/styles.css === */
+
+/* --- Digital Footprint Marker --- */
+@keyframes footprintPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.8);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+    opacity: 0.8;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: 0 0 10px 15px rgba(255, 255, 255, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+}
+
+.footprint-marker {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  z-index: 100;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  color: white;
+  animation: footprintPulse 1.5s infinite ease-out;
+}
+.footprint-marker::before {
+  content: "X";
+}
+
+/* Status-specific colors for markers */
+.footprint-marker.safe {
+  background-color: rgba(34, 197, 94, 0.5); /* var(--ok) */
+  border: 2px solid rgba(34, 197, 94, 1);
+}
+.footprint-marker.actual {
+  background-color: rgba(239, 68, 68, 0.5); /* var(--danger) */
+  border: 2px solid rgba(239, 68, 68, 1);
+}
+.footprint-marker.reported {
+  background-color: rgba(155, 89, 182, 0.5); /* Spoof purple */
+  border: 2px solid rgba(155, 89, 182, 1);
+}
+
+/* --- Glitching Animation (for DataInjection) --- */
+.drone.glitching .body {
+  /* Re-uses the glitch keyframes already in your styles.css */
+  animation: glitch 0.3s infinite;
+}
+
+/* --- Pulsing Spoofing Signal (for DataInjection) --- */
+@keyframes pulse-signal {
+  0% { opacity: 0.8; stroke-width: 2; }
+  50% { opacity: 1; stroke-width: 4; }
+  100% { opacity: 0.8; stroke-width: 2; }
+}
+
+.spoofing-signal {
+  /* ... your existing .spoofing-signal styles ... */
+  stroke: #e74c3c;
+  opacity: 0.8;
+  stroke-width: 2;
+  stroke-linecap: round;
+  /* Add this animation */
+  animation: pulse-signal 1s infinite ease-in-out;
+}

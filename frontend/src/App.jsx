@@ -22,7 +22,7 @@ export default function App() {
           {/* 2. ADD THE NEW LINK */}
           <Link to="/mass-redirection">Mass Redirection Sim</Link>
           <Link to="/spoofing-info">Spoofing Types</Link>
-          <a href="http://localhost:5000/api/logs" target="_blank" rel="noreferrer">Backend Logs</a>
+     
         </nav>
       </header>
 

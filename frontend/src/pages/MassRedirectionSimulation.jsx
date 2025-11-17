@@ -18,6 +18,7 @@ const DroneStatus = {
 
 const SIMULATION_SPEED = 50; // ms per tick
 const DRONE_SPEED = 1.5;
+const DRONE_SIZE_OFFSET = 14; // Half of drone size for path center
 
 // Helper to generate random starting positions
 const createDrone = (id, world) => {
@@ -28,9 +29,38 @@ const createDrone = (id, world) => {
     x,
     y,
     status: DroneStatus.NORMAL,
-    path: [{ x, y }]
+    path: [{ x, y }],
+    navTarget: null, // NEW: For pathfinding
   };
 };
+
+// --- NEW HELPER: Check for Line-Circle Intersection ---
+/**
+ * Checks if a line segment (from -> to) intersects a circle.
+ */
+function isPathBlocked(from, to, circle) {
+  const f = { x: from.x + DRONE_SIZE_OFFSET, y: from.y + DRONE_SIZE_OFFSET };
+  const t = { x: to.x, y: to.y }; // Target is already a center point
+  const c = { x: circle.x, y: circle.y };
+  const r = circle.radius + 15; // Add a 15px buffer
+
+  const a = (t.x - f.x) * (t.x - f.x) + (t.y - f.y) * (t.y - f.y);
+  const b = 2 * ((t.x - f.x) * (f.x - c.x) + (t.y - f.y) * (f.y - c.y));
+  const cc = (f.x - c.x) * (f.x - c.x) + (f.y - c.y) * (f.y - c.y) - r * r;
+  
+  let det = b * b - 4 * a * cc;
+  if (det < 0) {
+    return false; // No intersection
+  }
+  
+  det = Math.sqrt(det);
+  const t1 = (-b - det) / (2 * a);
+  const t2 = (-b + det) / (2 * a);
+
+  // Check if intersection is within the line segment (0 <= t <= 1)
+  return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
+}
+
 
 export default function MassRedirectionSimulation() {
   const world = { width: 1000, height: 650 };
@@ -38,7 +68,6 @@ export default function MassRedirectionSimulation() {
   // --- ENTITIES ---
   const [drones, setDrones] = useState([]);
   const [droneCount, setDroneCount] = useState(10);
-  // *** MODIFICATION: Added two radii. Inner (solid) and Outer (dotted fence) ***
   const [antiDroneTower] = useState({ 
     x: 500, 
     y: 325, 
@@ -47,11 +76,20 @@ export default function MassRedirectionSimulation() {
   });
   const [targetZone] = useState({ x: 850, y: 325, size: 100 });
   const [safeZone] = useState({ x: 500, y: 600, size: 120 });
+  
+  // --- NEW: Navigation waypoints to fly around tower ---
+  const navNodes = [
+    { x: antiDroneTower.x - antiDroneTower.radius - 50, y: antiDroneTower.y }, // Left node
+    { x: antiDroneTower.x + antiDroneTower.radius + 50, y: antiDroneTower.y }  // Right node
+  ];
+  const safeZoneTarget = { x: safeZone.x, y: safeZone.y };
+
 
   // --- SIMULATION STATE ---
   const [attackPhase, setAttackPhase] = useState(AttackPhase.INACTIVE);
   const [status, setStatus] = useState("Adjust drone count and press 'Activate System' to begin.");
   const [digitalFootprints, setDigitalFootprints] = useState([]);
+  const [finalPositions, setFinalPositions] = useState([]); // NEW: For footprints
 
   const simulationRef = useRef(null);
 
@@ -73,10 +111,10 @@ export default function MassRedirectionSimulation() {
 
   // --- SIMULATION CONTROLS ---
 
-  // Initialize drones based on the slider count
   const initializeDrones = () => {
     if (attackPhase !== AttackPhase.INACTIVE) return;
     setDigitalFootprints([]);
+    setFinalPositions([]); // NEW: Clear footprints
     addFootprint('AUTH', `System armed. Preparing for ${droneCount} potential targets.`);
     const newDrones = [];
     for (let i = 0; i < droneCount; i++) {
@@ -86,17 +124,16 @@ export default function MassRedirectionSimulation() {
     setStatus("Drones initialized. Press 'Activate System' to start redirection.");
   };
   
-  // Call this when the slider changes
   useEffect(() => {
     if (attackPhase === AttackPhase.INACTIVE) {
       initializeDrones();
     }
-  }, [droneCount, attackPhase]); // Re-init if count changes *while inactive*
+  }, [droneCount, attackPhase]); 
 
   const startSimulation = () => {
     if (attackPhase !== AttackPhase.INACTIVE) return;
     
-    initializeDrones(); // Ensure drones are set
+    initializeDrones(); 
     setAttackPhase(AttackPhase.NORMAL_FLIGHT);
     setStatus("Phase 1: Hostile drones are en route to the target zone.");
     addFootprint('WARN', `${droneCount} drones detected, proceeding to target.`);
@@ -109,10 +146,10 @@ export default function MassRedirectionSimulation() {
     setAttackPhase(AttackPhase.INACTIVE);
     setDrones([]);
     setDigitalFootprints([]);
+    setFinalPositions([]); // NEW: Clear footprints
     setStatus("System reset. Adjust drone count and press 'Activate System' to begin.");
   };
   
-  // Stop the simulation loop when component unmounts
   useEffect(() => {
     return () => clearInterval(simulationRef.current);
   }, []);
@@ -122,16 +159,17 @@ export default function MassRedirectionSimulation() {
   const runSimulationTick = () => {
     let nextPhase = attackPhase;
     let allSecured = true;
+    let newDronesList = []; // To store drones for final position logging
 
     setDrones(prevDrones => {
-      const newDrones = prevDrones.map(drone => {
+      newDronesList = prevDrones.map(drone => {
         let newPos = { x: drone.x, y: drone.y };
         let newStatus = drone.status;
+        let newNavTarget = drone.navTarget;
 
         // 1. Check for detection and redirection
         if (drone.status === DroneStatus.NORMAL) {
           allSecured = false;
-          // *** MODIFICATION: Check against the new outer detectionFenceRadius ***
           const distanceToTower = dist(drone, antiDroneTower);
           
           if (distanceToTower <= antiDroneTower.detectionFenceRadius) {
@@ -140,9 +178,21 @@ export default function MassRedirectionSimulation() {
             if (attackPhase !== AttackPhase.REDIRECTING) {
                 nextPhase = AttackPhase.REDIRECTING;
             }
-            // Log only once on detection
             if (drone.status !== DroneStatus.REDIRECTED) {
                  addFootprint('ATTACK', `Target ${drone.id}: Hostile intent detected at fence. Rerouting to safe zone.`);
+                 
+                 // --- NEW: PATHFINDING LOGIC ---
+                 if (isPathBlocked(drone, safeZoneTarget, antiDroneTower)) {
+                    // Path is blocked, find closest nav node
+                    const distToNode0 = dist(drone, navNodes[0]);
+                    const distToNode1 = dist(drone, navNodes[1]);
+                    newNavTarget = (distToNode0 < distToNode1) ? navNodes[0] : navNodes[1];
+                    addFootprint('AUTH', `Target ${drone.id}: Path blocked. Rerouting via NavNode.`);
+                 } else {
+                    // Path is clear
+                    newNavTarget = safeZoneTarget;
+                 }
+                 // --- END NEW PATHFINDING ---
             }
           }
         }
@@ -152,16 +202,24 @@ export default function MassRedirectionSimulation() {
         if (newStatus === DroneStatus.NORMAL) {
           target = { x: targetZone.x, y: targetZone.y };
         } else {
-          target = { x: safeZone.x, y: safeZone.y };
+          target = newNavTarget || safeZoneTarget; // Use navTarget if it exists
         }
 
         // 3. Move the drone
         newPos = moveTowards(drone, target, DRONE_SPEED);
         
+        // --- NEW: Check if intermediate navTarget is reached ---
+        if (newStatus === DroneStatus.REDIRECTED && newNavTarget && newNavTarget !== safeZoneTarget) {
+            if (dist(newPos, newNavTarget) < DRONE_SPEED * 2) {
+                newNavTarget = safeZoneTarget; // Now head to the final safe zone
+            }
+        }
+        // --- END NEW CHECK ---
+
         // 4. Check if in safe zone
         if (newStatus === DroneStatus.REDIRECTED) {
             allSecured = false; // Still en route
-            const distanceToSafe = dist(newPos, safeZone);
+            const distanceToSafe = dist(newPos, safeZoneTarget);
             if(distanceToSafe < safeZone.size / 2) {
                 newStatus = DroneStatus.SAFE;
                 addFootprint('SPOOF', `Target ${drone.id} has been secured in the safe zone.`);
@@ -174,10 +232,11 @@ export default function MassRedirectionSimulation() {
           x: newPos.x,
           y: newPos.y,
           status: newStatus,
-          path: [...drone.path, newPos]
+          path: [...drone.path, newPos],
+          navTarget: newNavTarget, // NEW: Persist navTarget
         };
       });
-      return newDrones;
+      return newDronesList;
     });
     
     // Update simulation phase
@@ -191,6 +250,9 @@ export default function MassRedirectionSimulation() {
         setStatus("Phase 3: All hostile drones have been successfully neutralized in the safe zone.");
         addFootprint('AUTH', `All ${droneCount} threats secured. System standing by.`);
         clearInterval(simulationRef.current);
+        
+        // --- NEW: Set final positions for footprints ---
+        setFinalPositions(newDronesList.map(d => ({ id: d.id, x: d.x, y: d.y, status: 'safe' })));
     }
   };
 
@@ -240,7 +302,6 @@ export default function MassRedirectionSimulation() {
           <div className="anti-drone-tower" style={{ left: antiDroneTower.x, top: antiDroneTower.y }}>
             <div className="tower-icon">🛡️</div>
             <span>Anti-Drone C2</span>
-            {/* *** MODIFICATION: Inner solid circle *** */}
             <div 
                 className="tower-radius" 
                 style={{
@@ -248,12 +309,11 @@ export default function MassRedirectionSimulation() {
                     height: antiDroneTower.radius * 2
                 }}
             />
-            {/* *** NEW: Outer dotted fence *** */}
             <div
                 className="detection-fence"
                 style={{
-                    width: antiDroneTower.detectionFenceRadius * 1.5,
-                    height: antiDroneTower.detectionFenceRadius * 1.5
+                    width: antiDroneTower.detectionFenceRadius * 2,
+                    height: antiDroneTower.detectionFenceRadius * 2
                 }}
             />
           </div>
@@ -270,12 +330,21 @@ export default function MassRedirectionSimulation() {
             </div>
           ))}
 
+          {/* --- NEW: Final Position Footprints --- */}
+          {finalPositions.map(pos => (
+            <div
+              key={pos.id}
+              className="footprint-marker safe"
+              style={{ left: pos.x + DRONE_SIZE_OFFSET, top: pos.y + DRONE_SIZE_OFFSET }}
+            />
+          ))}
+
           {/* Paths */}
           <svg className="path-svg">
             {drones.map(drone => (
               <polyline
                 key={drone.id}
-                points={drone.path.map(p => `${p.x + 14},${p.y + 14}`).join(' ')}
+                points={drone.path.map(p => `${p.x + DRONE_SIZE_OFFSET},${p.y + DRONE_SIZE_OFFSET}`).join(' ')}
                 className={drone.status === DroneStatus.NORMAL ? 'actual-path' : 'spoofed-path'}
               />
             ))}
