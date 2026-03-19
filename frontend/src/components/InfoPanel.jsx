@@ -22,11 +22,13 @@ const LogEntry = ({ log }) => {
 
 
 export default function InfoPanel({ attackPhase, status, digitalFootprints }) {
-  const footprintsEndRef = useRef(null);
+  const logContainerRef = useRef(null);
 
-  // Automatically scroll to the bottom of the logs
+  // Auto-scroll only the log container, not the page
   useEffect(() => {
-    footprintsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
   }, [digitalFootprints]);
 
   // Descriptions for each phase of the attack
@@ -53,11 +55,10 @@ export default function InfoPanel({ attackPhase, status, digitalFootprints }) {
 
       <div className="info-section">
         <h3>Digital Footprints & Telemetry</h3>
-        <div className="footprints-log">
+        <div className="footprints-log" ref={logContainerRef}>
           {digitalFootprints.map((log, index) => (
             <LogEntry key={index} log={log} />
           ))}
-          <div ref={footprintsEndRef} />
         </div>
       </div>
     </div>
