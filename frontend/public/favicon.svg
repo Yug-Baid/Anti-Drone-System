@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00f2ff;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0080ff;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Dark background hexagon -->
+  <polygon points="32,2 58,17 58,47 32,62 6,47 6,17" fill="#0a1428" stroke="url(#g)" stroke-width="2.5"/>
+  <!-- Inner hexagon border -->
+  <polygon points="32,8 52,20 52,44 32,56 12,44 12,20" fill="none" stroke="#00f2ff" stroke-width="0.8" opacity="0.3"/>
+  <!-- Shield icon -->
+  <path d="M32,14 L46,22 L46,38 C46,45 40,51 32,54 C24,51 18,45 18,38 L18,22 Z" 
+        fill="none" stroke="url(#g)" stroke-width="2" filter="url(#glow)"/>
+  <!-- Drone crosshair inside shield -->
+  <circle cx="32" cy="33" r="7" fill="none" stroke="#00f2ff" stroke-width="1.5" opacity="0.7"/>
+  <circle cx="32" cy="33" r="3" fill="none" stroke="#00f2ff" stroke-width="1" opacity="0.5"/>
+  <circle cx="32" cy="33" r="1.2" fill="#00f2ff"/>
+  <!-- Crosshair lines -->
+  <line x1="32" y1="24" x2="32" y2="29" stroke="#00f2ff" stroke-width="1" opacity="0.6"/>
+  <line x1="32" y1="37" x2="32" y2="42" stroke="#00f2ff" stroke-width="1" opacity="0.6"/>
+  <line x1="23" y1="33" x2="28" y2="33" stroke="#00f2ff" stroke-width="1" opacity="0.6"/>
+  <line x1="36" y1="33" x2="41" y2="33" stroke="#00f2ff" stroke-width="1" opacity="0.6"/>
+  <!-- Small accent dots at corners -->
+  <circle cx="32" cy="2" r="1.5" fill="#00f2ff" opacity="0.8"/>
+  <circle cx="58" cy="17" r="1" fill="#00f2ff" opacity="0.5"/>
+  <circle cx="6" cy="17" r="1" fill="#00f2ff" opacity="0.5"/>
+</svg>
