@@ -1,14 +1,179 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo, Suspense } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, Text } from "@react-three/drei";
+import * as THREE from "three";
 import Dashboard from "../components/Dashboard.jsx";
+import WireframeDrone from "../components/WireframeDrone.jsx";
+import useSirenSound from "../hooks/useSirenSound.js";
 
+/* ═══════════════════════════════════════════
+   COORDINATE SYSTEM
+   2D sim: 720×520, origin top-left
+   3D: centered, Y-up
+   ═══════════════════════════════════════════ */
+const SCALE = 0.025;
+const toWorld = (x, y) => [(x - 360) * SCALE, 0, (y - 260) * SCALE];
+
+/* ── Ground Plane ── */
+function GroundPlane() {
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+        <planeGeometry args={[20, 15]} />
+        <meshBasicMaterial color="#060a14" transparent opacity={0.6} />
+      </mesh>
+      <gridHelper args={[20, 40, "#0a1530", "#0a1530"]} position={[0, -0.04, 0]} />
+      <lineSegments position={[0, 0.5, 0]}>
+        <edgesGeometry args={[new THREE.BoxGeometry(18, 1, 13)]} />
+        <lineBasicMaterial color="#00f2ff" transparent opacity={0.06} />
+      </lineSegments>
+    </group>
+  );
+}
+
+/* ── Zone (Danger / Safe) ── */
+function Zone3D({ x, y, radius, label, color, pulse = false }) {
+  const ref = useRef();
+  const [pos] = useState(() => toWorld(x, y));
+  const r = radius * SCALE;
+
+  useFrame(({ clock }) => {
+    if (ref.current && pulse) {
+      const s = 1 + Math.sin(clock.elapsedTime * 2) * 0.06;
+      ref.current.scale.set(s, 1, s);
+    }
+  });
+
+  return (
+    <group ref={ref} position={pos}>
+      <mesh>
+        <cylinderGeometry args={[r, r, 0.15, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.1} />
+      </mesh>
+      <mesh position={[0, 0.08, 0]}>
+        <torusGeometry args={[r, 0.02, 8, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.5} />
+      </mesh>
+      <Text position={[0, 0.4, 0]} fontSize={0.22} color={color} anchorX="center">
+        {label}
+      </Text>
+    </group>
+  );
+}
+
+/* ── Warning Ring ── */
+function WarningRing({ x, y, innerRadius, outerRadius }) {
+  const [pos] = useState(() => toWorld(x, y));
+  const innerR = innerRadius * SCALE;
+  const outerR = outerRadius * SCALE;
+
+  return (
+    <group position={[pos[0], 0.02, pos[2]]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[innerR, outerR, 48]} />
+        <meshBasicMaterial color="#ffaa00" transparent opacity={0.06} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[outerR - 0.02, outerR, 48]} />
+        <meshBasicMaterial color="#ffaa00" transparent opacity={0.2} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+/* ── Interactive Drone ── */
+function InteractiveDrone({ x, y, spoofed, destroyed, color }) {
+  const ref = useRef();
+  const targetPos = useMemo(() => toWorld(x, y), [x, y]);
+
+  useFrame((_, delta) => {
+    if (!ref.current) return;
+    ref.current.position.x += (targetPos[0] - ref.current.position.x) * Math.min(1, delta * 12);
+    ref.current.position.z += (targetPos[2] - ref.current.position.z) * Math.min(1, delta * 12);
+
+    if (spoofed && !destroyed) {
+      ref.current.position.x += (Math.random() - 0.5) * 0.02;
+      ref.current.position.z += (Math.random() - 0.5) * 0.02;
+    }
+
+    ref.current.position.y = destroyed ? Math.max(ref.current.position.y - delta * 2, 0) : 0.3 + Math.sin(Date.now() * 0.003) * 0.04;
+  });
+
+  const droneColor = destroyed ? "#ff3344" : spoofed ? "#ffaa00" : color;
+
+  return (
+    <group ref={ref} position={[targetPos[0], 0.3, targetPos[2]]}>
+      {!destroyed && <WireframeDrone scale={0.6} color={droneColor} spinning={!destroyed} />}
+      {destroyed && (
+        <mesh>
+          <sphereGeometry args={[0.3, 12, 12]} />
+          <meshBasicMaterial color="#ff3344" transparent opacity={0.6} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/* ── Destruction FX ── */
+function DestructionFX({ active, x, y }) {
+  const ref = useRef();
+  const [pos] = useState(() => toWorld(x, y));
+  const startTime = useRef(Date.now());
+
+  useEffect(() => {
+    if (active) startTime.current = Date.now();
+  }, [active]);
+
+  useFrame(() => {
+    if (!ref.current || !active) return;
+    const elapsed = (Date.now() - startTime.current) / 1000;
+    const s = Math.min(elapsed * 3, 2);
+    ref.current.scale.set(s, s, s);
+    ref.current.children.forEach(child => {
+      if (child.material) {
+        child.material.opacity = Math.max(0, 1 - elapsed * 0.8);
+      }
+    });
+  });
+
+  if (!active) return null;
+
+  return (
+    <group ref={ref} position={[pos[0], 0.3, pos[2]]}>
+      <mesh>
+        <sphereGeometry args={[0.2, 16, 16]} />
+        <meshBasicMaterial color="#ff6b6b" transparent opacity={1} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[0.35, 12, 12]} />
+        <meshBasicMaterial color="#00f2ff" wireframe transparent opacity={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+/* ── Siren Banner Overlay (DOM) ── */
+function SirenBanner({ warning, spoofed, destroyed }) {
+  if (!warning || spoofed || destroyed) return null;
+  return (
+    <div className="siren-banner" role="alert" aria-live="assertive" style={{
+      position: 'absolute', right: 16, top: 16, zIndex: 20
+    }}>
+      <div className="siren-icon" />
+      <span>Approaching restricted airspace</span>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   MAIN COMPONENT (all game logic preserved)
+   ═══════════════════════════════════════════ */
 export default function DroneSimulation() {
   const world = { width: 720, height: 520 };
 
-  // Circles
   const danger = { x: 420, y: 200, radius: 70 };
   const safe   = { x: 100, y: 380, radius: 48 };
 
-  // Invisible warning ring
   const warningBuffer = 90;
   const warningRadius = danger.radius + warningBuffer;
 
@@ -17,11 +182,14 @@ export default function DroneSimulation() {
   const [spoofed, setSpoofed] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [warning, setWarning] = useState(false);
-  const [destroyed, setDestroyed] = useState(false);   // destruction state
+  const [destroyed, setDestroyed] = useState(false);
   const [status, setStatus] = useState("Use arrow keys or WASD to move the drone.");
 
   const moveRef = useRef(null);
   const lastWarnRef = useRef(false);
+
+  // --- SIREN SOUND ---
+  const siren = useSirenSound();
 
   // utils
   const clamp = (v, a, b) => Math.max(a, Math.min(v, b));
@@ -37,7 +205,6 @@ export default function DroneSimulation() {
   };
   const insideSafe = (pt) => dist(pt, { x: safe.x, y: safe.y }) <= safe.radius;
 
-  // segment-circle intersection
   function segHitsCircle(A, B, C, r) {
     const vx = B.x - A.x, vy = B.y - A.y;
     const wx = C.x - A.x, wy = C.y - A.y;
@@ -49,7 +216,6 @@ export default function DroneSimulation() {
     return dist(Closest, C) <= r - 0.0001;
   }
 
-  // animator (guards callbacks)
   function animateTo(targetTL, step = 6, onStep, onDone) {
     if (typeof onStep !== "function") onStep = () => {};
     if (typeof onDone !== "function") onDone = () => {};
@@ -73,7 +239,6 @@ export default function DroneSimulation() {
     }, 16);
   }
 
-  // exit danger → arc around (r+10) → safe edge → safe center
   function buildArcThenSafePath(exitCenter, C, r, S, rs, droneWH) {
     const bufferR = r + 10;
     const a0 = angleOf(C, exitCenter);
@@ -128,11 +293,11 @@ export default function DroneSimulation() {
     return pointsTL;
   }
 
-  // destruction FX (plays *inside* the safe circle)
   const triggerDestruction = () => {
     clearInterval(moveRef.current);
     setDestroyed(true);
     setStatus("🛡️ Drone neutralized by defense system.");
+    siren.stop();
     setTimeout(() => {
       setDrone({ x: 40, y: 40, width: 28, height: 28 });
       setSpoofed(false);
@@ -143,10 +308,10 @@ export default function DroneSimulation() {
     }, 1400);
   };
 
-  // spoof → exit → arc → safe → destroy
   const startSpoofSequence = (currentCenter) => {
     setSpoofed(true);
     setStatus("🚨 Spoof detected — moving out of danger zone...");
+    siren.play();
 
     const C = { x: danger.x, y: danger.y };
     const v = { x: currentCenter.x - C.x, y: currentCenter.y - C.y };
@@ -169,7 +334,6 @@ export default function DroneSimulation() {
 
     const stepNext = () => {
       if (i >= sequence.length) {
-        // At safe center → destroy (FX is rendered inside the safe circle)
         triggerDestruction();
         return;
       }
@@ -198,7 +362,6 @@ export default function DroneSimulation() {
         const ny = clamp(prev.y + dy, 0, world.height - prev.height);
         const centerPt = { x: nx + prev.width / 2, y: ny + prev.height / 2 };
 
-        // warning ring
         const warn = insideWarningOnly(centerPt);
         setWarning(warn);
         if (warn && !lastWarnRef.current) {
@@ -210,13 +373,11 @@ export default function DroneSimulation() {
           lastWarnRef.current = false;
         }
 
-        // danger → spoof
         if (insideDanger(centerPt)) {
           startSpoofSequence(centerPt);
           return { ...prev };
         }
 
-        // direct entry into safe (edge case) → destroy
         if (insideSafe(centerPt)) {
           triggerDestruction();
           return { ...prev, x: nx, y: ny };
@@ -230,7 +391,10 @@ export default function DroneSimulation() {
   }, [spoofed, destroyed, speed]);
 
   // cleanup
-  useEffect(() => () => clearInterval(moveRef.current), []);
+  useEffect(() => () => {
+    clearInterval(moveRef.current);
+    siren.stop();
+  }, []);
 
   // derived flags for dashboard
   const droneCenter = centerOf(drone);
@@ -241,72 +405,51 @@ export default function DroneSimulation() {
     <div className="layout">
       <div className="stage-card">
         <div className="stage-head">
-          <div className="title">🎮 Simulation</div>
+          <div className="title">🎮 3D SIMULATION</div>
           <div className={`badge ${spoofed ? "bad" : destroyed ? "bad" : warning ? "bad" : "good"}`}>
             {spoofed ? "SPOOFED" : destroyed ? "NEUTRALIZED" : warning ? "WARNING" : "LIVE"}
           </div>
         </div>
 
-        <div className="world" style={{ width: world.width, height: world.height }}>
-          <div className="grid" />
+        <div style={{ position: "relative" }}>
+          <div className="sim-canvas-container" style={{ height: "520px", borderRadius: "var(--radius)", overflow: "hidden" }}>
+            <Canvas camera={{ position: [0, 10, 10], fov: 50 }} style={{ width: "100%", height: "100%" }} gl={{ antialias: true }}>
+              <Suspense fallback={null}>
+                <ambientLight intensity={0.25} />
+                <pointLight position={[5, 8, 5]} intensity={0.4} color="#00f2ff" />
+                <OrbitControls enablePan maxPolarAngle={Math.PI / 2.2} minDistance={4} maxDistance={20} />
 
-          {/* Danger circle */}
-          <div
-            className="zone danger-circle"
-            style={{
-              left: danger.x - danger.radius,
-              top: danger.y - danger.radius,
-              width: danger.radius * 2,
-              height: danger.radius * 2,
-              borderRadius: "50%",
-            }}
-          >
-            <span>Danger</span>
+                <GroundPlane />
+
+                {/* Danger Zone */}
+                <Zone3D x={danger.x} y={danger.y} radius={danger.radius} label="DANGER" color="#ff3344" pulse />
+                {/* Safe Zone */}
+                <Zone3D x={safe.x} y={safe.y} radius={safe.radius} label="SAFE" color="#00ff88" />
+                {/* Warning Ring */}
+                <WarningRing x={danger.x} y={danger.y} innerRadius={danger.radius} outerRadius={warningRadius} />
+
+                {/* Drone */}
+                <InteractiveDrone
+                  x={drone.x + drone.width / 2}
+                  y={drone.y + drone.height / 2}
+                  spoofed={spoofed}
+                  destroyed={destroyed}
+                  color="#00f2ff"
+                />
+
+                {/* Destruction FX */}
+                <DestructionFX active={destroyed} x={safe.x} y={safe.y} />
+              </Suspense>
+            </Canvas>
           </div>
 
-          {/* Safe circle (FX will render inside this element) */}
-          <div
-            className="zone safe-circle"
-            style={{
-              left: safe.x - safe.radius,
-              top: safe.y - safe.radius,
-              width: safe.radius * 2,
-              height: safe.radius * 2,
-              borderRadius: "50%",
-              overflow: "hidden" // ensure FX is clipped to the circle
-            }}
-          >
-            <span>Safe</span>
-
-            {/* Destruction FX inside the circle, centered */}
-            {destroyed && (
-              <div className="destroy-overlay destroy-overlay--centered">
-                <div className="blast"></div>
-                <div className="shockwave"></div>
-                <div className="destroy-text"></div>
-              </div>
-            )}
+          {/* Status Toast */}
+          <div className="toast" aria-live="polite" style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 10 }}>
+            {status}
           </div>
 
-          {/* Drone */}
-          <div
-            className={`drone ${spoofed ? "spoofed" : ""} ${destroyed ? "destroyed" : ""}`}
-            style={{ left: drone.x, top: drone.y, width: drone.width, height: drone.height }}
-          >
-            <div className="body">🚁</div>
-            <div className="shadow" />
-          </div>
-
-          {/* Status */}
-          <div className="toast" aria-live="polite">{status}</div>
-
-          {/* Siren during WARNING */}
-          {warning && !spoofed && !destroyed && (
-            <div className="siren-banner" role="alert" aria-live="assertive">
-              <div className="siren-icon" />
-              <span>Approaching restricted airspace</span>
-            </div>
-          )}
+          {/* Siren Banner */}
+          <SirenBanner warning={warning} spoofed={spoofed} destroyed={destroyed} />
         </div>
       </div>
 
@@ -326,8 +469,6 @@ export default function DroneSimulation() {
           inSafe,
         }}
       />
-      
     </div>
-    
   );
 }
