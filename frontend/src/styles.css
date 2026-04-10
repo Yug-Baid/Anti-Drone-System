@@ -1206,7 +1206,31 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ==================== MISSION FAILURE ENHANCEMENTS ==================== */
+
+/* Siren banner — full-width variant (for mission failure page) */
+.siren-banner[style*="width: 100%"] {
+  right: auto;
+  top: auto;
+}
+
+/* Telemetry readout grid */
+.telemetry-readout .telemetry-item {
+  font-family: var(--font-mono);
+}
+
+/* Mission timeline overrides */
+.mission-timeline .footprints-log {
+  scrollbar-gutter: stable;
+}
+
 /* ==================== RESPONSIVE ==================== */
+@media (max-width: 1400px) {
+  .stats-section[style*="repeat(6"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
 @media (max-width: 1200px) {
   .gnss-layout { grid-template-columns: 1fr; gap: 16px; }
   .stage-card.large { min-width: 0; }
@@ -1219,6 +1243,9 @@ body {
 
 @media (max-width: 980px) {
   .info-grid { grid-template-columns: 1fr; }
+  .stats-section[style*="repeat(6"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 }
 
 @media (max-width: 768px) {

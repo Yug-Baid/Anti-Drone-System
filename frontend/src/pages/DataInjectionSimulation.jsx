@@ -1,7 +1,16 @@
-import React, { useEffect, useRef, useState, useCallback, Suspense } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, Line, Text } from "@react-three/drei";
+import * as THREE from "three";
 import InfoPanel from "../components/InfoPanel.jsx";
 import WireframeDrone from "../components/WireframeDrone.jsx";
+import useSirenSound from "../hooks/useSirenSound.js";
+
+/* ═══════════════════════════════════════════
+   COORDINATE SYSTEM & CONSTANTS
+   ═══════════════════════════════════════════ */
+const SCALE = 0.02;
+const toWorld = (x, y) => [(x - 500) * SCALE, 0, (y - 325) * SCALE];
 
 const AttackPhase = {
   INACTIVE: 'INACTIVE',
@@ -13,26 +22,285 @@ const AttackPhase = {
 
 const SIMULATION_SPEED = 50;
 const DRONE_SPEED = 2;
-const JITTER_AMOUNT = 4;
 const DRONE_SIZE_OFFSET = 14;
 
-/* ── Inline 3D drone for the simulation world ── */
-function MiniDrone3D({ color = "#00f2ff" }) {
+/* ═══════════════════════════════════════════
+   3D SCENE COMPONENTS
+   ═══════════════════════════════════════════ */
+
+function GroundPlane() {
   return (
-    <Canvas
-      camera={{ position: [0, 0.5, 2.5], fov: 45 }}
-      style={{ width: "40px", height: "40px", pointerEvents: "none" }}
-      gl={{ alpha: true, antialias: true }}
-    >
-      <ambientLight intensity={0.5} />
-      <pointLight position={[2, 2, 2]} intensity={0.3} color={color} />
-      <Suspense fallback={null}>
-        <WireframeDrone scale={1.2} color={color} />
-      </Suspense>
-    </Canvas>
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+        <planeGeometry args={[22, 15]} />
+        <meshBasicMaterial color="#060a14" transparent opacity={0.6} />
+      </mesh>
+      <gridHelper args={[22, 44, "#0a1530", "#0a1530"]} position={[0, -0.04, 0]} />
+      <lineSegments position={[0, 0.5, 0]}>
+        <edgesGeometry args={[new THREE.BoxGeometry(20, 1, 13)]} />
+        <lineBasicMaterial color="#00f2ff" transparent opacity={0.06} />
+      </lineSegments>
+    </group>
   );
 }
 
+/* ── Drone Entity ── */
+function Drone3D({ x, y, color, label, glitching = false, shieldActive = false }) {
+  const ref = useRef();
+  const targetPos = useMemo(() => toWorld(x + DRONE_SIZE_OFFSET, y + DRONE_SIZE_OFFSET), [x, y]);
+
+  useFrame((_, delta) => {
+    if (!ref.current) return;
+    ref.current.position.x += (targetPos[0] - ref.current.position.x) * Math.min(1, delta * 10);
+    ref.current.position.z += (targetPos[2] - ref.current.position.z) * Math.min(1, delta * 10);
+    // Glitch effect
+    if (glitching) {
+      ref.current.position.x += (Math.random() - 0.5) * 0.03;
+      ref.current.position.z += (Math.random() - 0.5) * 0.03;
+    }
+    ref.current.position.y = 0.3 + Math.sin(Date.now() * 0.003) * 0.04;
+  });
+
+  return (
+    <group ref={ref} position={[targetPos[0], 0.3, targetPos[2]]}>
+      <WireframeDrone scale={0.5} color={color} />
+      {label && (
+        <Text position={[0, 0.45, 0]} fontSize={0.13} color={color} anchorX="center">
+          {label}
+        </Text>
+      )}
+      {shieldActive && (
+        <mesh>
+          <sphereGeometry args={[0.4, 16, 16]} />
+          <meshBasicMaterial color="#00ff88" wireframe transparent opacity={0.25} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/* ── Waypoint Marker ── */
+function WaypointMarker({ x, y, index }) {
+  const [pos] = useState(() => toWorld(x, y));
+  return (
+    <group position={pos}>
+      <mesh position={[0, 0.2, 0]}>
+        <octahedronGeometry args={[0.12, 0]} />
+        <meshBasicMaterial color="#00ff88" wireframe transparent opacity={0.8} />
+      </mesh>
+      <Text position={[0, 0.45, 0]} fontSize={0.12} color="#00ff88" anchorX="center">
+        {`WP${index + 1}`}
+      </Text>
+    </group>
+  );
+}
+
+/* ── Radio Tower (Attacker C2) ── */
+function AttackerTower({ x, y }) {
+  const [pos] = useState(() => toWorld(x, y));
+  const ref = useRef();
+
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.y = clock.elapsedTime * 0.3;
+  });
+
+  return (
+    <group position={pos}>
+      <mesh position={[0, 0.3, 0]}>
+        <cylinderGeometry args={[0.08, 0.15, 0.6, 6]} />
+        <meshBasicMaterial color="#ff3344" wireframe />
+      </mesh>
+      <mesh position={[0, 0.7, 0]}>
+        <coneGeometry args={[0.2, 0.3, 6]} />
+        <meshBasicMaterial color="#ff3344" wireframe />
+      </mesh>
+      <mesh position={[0, 0.95, 0]}>
+        <sphereGeometry args={[0.04, 8, 8]} />
+        <meshBasicMaterial color="#ff3344" transparent opacity={0.9} />
+      </mesh>
+      <group ref={ref} position={[0, 0.02, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.6, 0.62, 32]} />
+          <meshBasicMaterial color="#ff3344" transparent opacity={0.2} side={THREE.DoubleSide} />
+        </mesh>
+      </group>
+      <Text position={[0, 1.3, 0]} fontSize={0.16} color="#ff3344" anchorX="center">
+        ATTACKER C2
+      </Text>
+    </group>
+  );
+}
+
+/* ── Malicious Target Marker ── */
+function MaliciousTarget({ x, y }) {
+  const [pos] = useState(() => toWorld(x, y));
+  const ref = useRef();
+
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      const s = 1 + Math.sin(clock.elapsedTime * 3) * 0.08;
+      ref.current.scale.set(s, 1, s);
+    }
+  });
+
+  return (
+    <group ref={ref} position={pos}>
+      <mesh>
+        <cylinderGeometry args={[0.4, 0.4, 0.1, 32]} />
+        <meshBasicMaterial color="#ff3344" transparent opacity={0.1} />
+      </mesh>
+      <mesh position={[0, 0.06, 0]}>
+        <torusGeometry args={[0.4, 0.02, 8, 32]} />
+        <meshBasicMaterial color="#ff3344" transparent opacity={0.5} />
+      </mesh>
+      <Text position={[0, 0.35, 0]} fontSize={0.16} color="#ff3344" anchorX="center">
+        INJECTED
+      </Text>
+    </group>
+  );
+}
+
+/* ── Data Packets flying in 3D ── */
+function DataPackets3D({ packets, towerPos }) {
+  return (
+    <group>
+      {packets.map(packet => {
+        const from = toWorld(towerPos.x, towerPos.y);
+        const to = toWorld(packet.targetX + DRONE_SIZE_OFFSET, packet.targetY + DRONE_SIZE_OFFSET);
+        const progress = ((Date.now() - (packet.startTime || Date.now())) % 1000) / 1000;
+        const x = from[0] + (to[0] - from[0]) * progress;
+        const z = from[2] + (to[2] - from[2]) * progress;
+        const y = 0.4 + Math.sin(progress * Math.PI) * 0.5;
+
+        return (
+          <mesh key={packet.id} position={[x, y, z]}>
+            <sphereGeometry args={[0.04, 8, 8]} />
+            <meshBasicMaterial color="#00f2ff" transparent opacity={1 - progress * 0.5} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+/* ── Signal beam between points ── */
+function SignalBeam3D({ from, to, color }) {
+  const fromPos = useMemo(() => {
+    const [x, , z] = toWorld(from.x + DRONE_SIZE_OFFSET, from.y + DRONE_SIZE_OFFSET);
+    return [x, 0.3, z];
+  }, [from.x, from.y]);
+  const toPos = useMemo(() => {
+    const [x, , z] = toWorld(to.x, to.y);
+    return [x, 0.5, z];
+  }, [to.x, to.y]);
+
+  return <Line points={[fromPos, toPos]} color={color} lineWidth={1.5} transparent opacity={0.6} />;
+}
+
+/* ── Footprints ── */
+function Footprints3D({ positions }) {
+  return (
+    <group>
+      {positions.map((pos) => {
+        const [px, , pz] = toWorld(pos.x + DRONE_SIZE_OFFSET, pos.y + DRONE_SIZE_OFFSET);
+        const color = pos.status === 'actual' ? '#ff3344' : '#bb88ff';
+        return (
+          <group key={pos.id}>
+            <mesh position={[px, 0.05, pz]}>
+              <sphereGeometry args={[0.1, 12, 12]} />
+              <meshBasicMaterial color={color} transparent opacity={0.7} />
+            </mesh>
+            <Text position={[px, 0.3, pz]} fontSize={0.1} color={color} anchorX="center">
+              {pos.status === 'actual' ? 'ACTUAL' : 'REPORTED'}
+            </Text>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   COMPLETE 3D SCENE
+   ═══════════════════════════════════════════ */
+function InjectionScene({ drone, reportedDrone, dronePath, reportedPath, waypoints,
+  radioTower, maliciousTarget, attackPhase, dataPackets, finalPositions, trustNeutralized }) {
+
+  const actualPathPts = useMemo(() => {
+    if (dronePath.length < 2) return null;
+    return dronePath.map(p => { const [x,,z] = toWorld(p.x + DRONE_SIZE_OFFSET, p.y + DRONE_SIZE_OFFSET); return [x, 0.12, z]; });
+  }, [dronePath]);
+
+  const reportedPathPts = useMemo(() => {
+    if (reportedPath.length < 2) return null;
+    return reportedPath.map(p => { const [x,,z] = toWorld(p.x + DRONE_SIZE_OFFSET, p.y + DRONE_SIZE_OFFSET); return [x, 0.08, z]; });
+  }, [reportedPath]);
+
+  const waypointLinePts = useMemo(() => {
+    return waypoints.map(wp => { const [x,,z] = toWorld(wp.x, wp.y); return [x, 0.05, z]; });
+  }, [waypoints]);
+
+  return (
+    <>
+      <ambientLight intensity={0.25} />
+      <pointLight position={[5, 8, 5]} intensity={0.4} color="#00f2ff" />
+      <OrbitControls enablePan maxPolarAngle={Math.PI / 2.2} minDistance={4} maxDistance={25} />
+
+      <GroundPlane />
+
+      {/* Waypoints */}
+      {waypoints.map((wp, idx) => (
+        <WaypointMarker key={idx} x={wp.x} y={wp.y} index={idx} />
+      ))}
+      {waypointLinePts.length >= 2 && (
+        <Line points={waypointLinePts} color="#00ff88" lineWidth={1.5} dashed dashSize={0.1} gapSize={0.05} transparent opacity={0.4} />
+      )}
+
+      {/* Attacker Tower */}
+      <AttackerTower x={radioTower.x} y={radioTower.y} />
+
+      {/* Malicious Target */}
+      <MaliciousTarget x={maliciousTarget.x} y={maliciousTarget.y} />
+
+      {/* Data Packets */}
+      <DataPackets3D packets={dataPackets} towerPos={radioTower} />
+
+      {/* Signal beam when hijacked */}
+      {attackPhase >= AttackPhase.HIJACKED && !trustNeutralized && (
+        <SignalBeam3D from={drone} to={radioTower} color="#ff3344" />
+      )}
+
+      {/* Ghost (Reported) Drone */}
+      <Drone3D
+        x={reportedDrone.x}
+        y={reportedDrone.y}
+        color="#8888bb"
+        label={trustNeutralized ? "VALIDATED" : "PERCEIVED"}
+      />
+
+      {/* Real Drone */}
+      <Drone3D
+        x={drone.x}
+        y={drone.y}
+        color={trustNeutralized ? "#00ff88" : "#00f2ff"}
+        label="ACTUAL"
+        glitching={attackPhase >= AttackPhase.HIJACKED && !trustNeutralized}
+        shieldActive={trustNeutralized}
+      />
+
+      {/* Paths */}
+      {reportedPathPts && <Line points={reportedPathPts} color="#8888bb" lineWidth={1.2} transparent opacity={0.4} />}
+      {actualPathPts && <Line points={actualPathPts} color="#ff3344" lineWidth={2} dashed dashSize={0.08} gapSize={0.04} />}
+
+      {/* Footprints */}
+      <Footprints3D positions={finalPositions} />
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   MAIN COMPONENT (simulation logic 100% preserved)
+   ═══════════════════════════════════════════ */
 export default function DataInjectionSimulation() {
   const world = { width: 1000, height: 650 };
 
@@ -72,6 +340,9 @@ export default function DataInjectionSimulation() {
   const latestDronePos = useRef(initialDroneState);
   const latestReportedPos = useRef(initialDroneState);
 
+  // --- SIREN SOUND ---
+  const siren = useSirenSound();
+
   const formatCoords = (x, y) => `(${Math.round(x)}, ${Math.round(y)})`;
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -98,7 +369,8 @@ export default function DataInjectionSimulation() {
     setAttackPhase(AttackPhase.INACTIVE);
     setTrustNeutralized(false);
     setStatus("Simulation reset. Press play to start.");
-  }, []);
+    siren.stop();
+  }, [siren]);
 
   const togglePlayPause = () => {
     if (attackPhase === AttackPhase.COMPLETED) return;
@@ -124,7 +396,8 @@ export default function DataInjectionSimulation() {
       x: radioTower.x,
       y: radioTower.y,
       targetX: latestDronePos.current.x,
-      targetY: latestDronePos.current.y
+      targetY: latestDronePos.current.y,
+      startTime: Date.now(),
     };
     setDataPackets(prev => [...prev, newPacket]);
     setTimeout(() => {
@@ -148,6 +421,7 @@ export default function DataInjectionSimulation() {
       addFootprint('AUTH', '🛡️ TRUST METRIC: Cross-validating delayed data against real-time kinematics...');
       addFootprint('AUTH', '🛡️ ATTACK NEUTRALIZED: Inconsistency detected. Reverting to validated state.');
       setStatus("Defense Active: Trust Metric has neutralized the attack. Drone returning to mission.");
+      siren.stop();
     }
 
     if (nextPhase !== attackPhase) {
@@ -156,6 +430,7 @@ export default function DataInjectionSimulation() {
         case AttackPhase.ATTACK_INJECT:
           setStatus("Phase 2: Attacker is injecting malicious MAVLink commands.");
           addFootprint('ATTACK', 'Network intrusion detected. Injecting CMD_OVERRIDE...');
+          siren.play();
           break;
         case AttackPhase.HIJACKED:
           if (!trustMetric) {
@@ -174,6 +449,7 @@ export default function DataInjectionSimulation() {
             addFootprint('SPOOF', `[FAKE TELEMETRY] Arrived at Waypoint #${reportedWaypointIdx}.`);
           }
           setIsPlaying(false);
+          siren.stop();
           setFinalPositions([
             { id: 'actual', x: latestDronePos.current.x, y: latestDronePos.current.y, status: 'actual' },
             { id: 'reported', x: latestReportedPos.current.x, y: latestReportedPos.current.y, status: 'reported' }
@@ -191,8 +467,8 @@ export default function DataInjectionSimulation() {
       const targetWp = waypoints[reportedWaypointIdx];
       let newPos = moveTowards(prev, targetWp, DRONE_SPEED);
       if (nextPhase >= AttackPhase.HIJACKED && !trustNeutralized) {
-        newPos.x += (Math.random() - 0.5) * JITTER_AMOUNT;
-        newPos.y += (Math.random() - 0.5) * JITTER_AMOUNT;
+        newPos.x += (Math.random() - 0.5) * 4;
+        newPos.y += (Math.random() - 0.5) * 4;
       }
       if (dist(newPos, targetWp) < DRONE_SPEED) {
         const newIndex = reportedWaypointIdx + 1;
@@ -235,7 +511,7 @@ export default function DataInjectionSimulation() {
     if (nextPhase === AttackPhase.ATTACK_INJECT && newTime % 200 < SIMULATION_SPEED) {
       spawnDataPacket();
     }
-  }, [simulationTime, attackPhase, addFootprint, waypoints, currentWaypointIdx, reportedWaypointIdx, maliciousTarget, trustMetric, trustNeutralized]);
+  }, [simulationTime, attackPhase, addFootprint, waypoints, currentWaypointIdx, reportedWaypointIdx, maliciousTarget, trustMetric, trustNeutralized, siren]);
 
   useEffect(() => {
     if (isPlaying && attackPhase !== AttackPhase.COMPLETED) {
@@ -246,11 +522,15 @@ export default function DataInjectionSimulation() {
     return () => clearInterval(simulationRef.current);
   }, [isPlaying, runSimulationTick, attackPhase]);
 
+  useEffect(() => {
+    return () => siren.stop();
+  }, []);
+
   return (
     <div className="gnss-layout">
       <div className="stage-card large">
         <div className="stage-head">
-          <div className="title">📦 DATA & COMMAND INJECTION</div>
+          <div className="title">📦 DATA & COMMAND INJECTION — 3D</div>
           <div className="playback-controls">
             {/* Trust Metric Toggle */}
             <div className={`trust-toggle ${trustMetric ? 'active' : ''}`}>
@@ -259,7 +539,7 @@ export default function DataInjectionSimulation() {
                 onClick={() => setTrustMetric(!trustMetric)}
                 aria-label="Toggle Trust Metric"
               />
-              <span className={`trust-label ${trustMetric ? '' : ''}`}>
+              <span className="trust-label">
                 {trustMetric ? '🛡️ TRUST METRIC: ON' : 'TRUST METRIC: OFF'}
               </span>
             </div>
@@ -272,104 +552,25 @@ export default function DataInjectionSimulation() {
           </div>
         </div>
 
-        <div className="world" style={{ width: world.width, height: world.height }}>
-          <div className="grid" />
-
-          <div className="radio-tower" style={{ left: radioTower.x, top: radioTower.y }}>
-            <div className="tower-icon">📡</div><span>Attacker C2</span>
-          </div>
-
-          <div className="spoofed-target-location" style={{ left: maliciousTarget.x, top: maliciousTarget.y }}>
-            <span>INJECTED</span>
-          </div>
-
-          <svg className="path-svg">
-            <polyline
-              points={waypoints.map(p => `${p.x},${p.y}`).join(' ')}
-              className="waypoint-path"
-            />
-          </svg>
-          {waypoints.map((wp, idx) => (
-            <div key={idx} className="waypoint-marker" style={{ left: wp.x, top: wp.y }}>
-              <span>{idx + 1}</span>
-            </div>
-          ))}
-
-          {dataPackets.map(packet => (
-            <div
-              key={packet.id}
-              className="data-packet"
-              style={{
-                left: packet.x,
-                top: packet.y,
-                '--target-x': `${packet.targetX}px`,
-                '--target-y': `${packet.targetY}px`
-              }}
-            />
-          ))}
-
-          {/* Ghost Drone — 3D */}
-          <div className="drone spoofed-ghost" style={{ left: reportedDrone.x, top: reportedDrone.y }}>
-            <MiniDrone3D color="#8888bb" />
-            {trustNeutralized && (
-              <div style={{
-                position: 'absolute',
-                top: '-18px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
-                color: 'var(--ok)',
-                whiteSpace: 'nowrap',
-                background: 'rgba(0,255,136,0.1)',
-                padding: '1px 6px',
-                borderRadius: '4px',
-                border: '1px solid rgba(0,255,136,0.3)',
-              }}>
-                VALIDATED
-              </div>
-            )}
-          </div>
-
-          {/* Real Drone — 3D */}
-          <div
-            className={`drone ${attackPhase >= AttackPhase.HIJACKED && !trustNeutralized ? 'glitching' : ''}`}
-            style={{ left: drone.x, top: drone.y }}
-          >
-            <MiniDrone3D color={trustNeutralized ? "#00ff88" : "#00f2ff"} />
-            {trustNeutralized && (
-              <div style={{
-                position: 'absolute',
-                inset: '-4px',
-                borderRadius: '50%',
-                border: '2px solid var(--ok)',
-                boxShadow: '0 0 12px rgba(0,255,136,0.4)',
-                pointerEvents: 'none',
-              }} />
-            )}
-          </div>
-
-          {finalPositions.map(pos => (
-            <div
-              key={pos.id}
-              className={`footprint-marker ${pos.status}`}
-              style={{ left: pos.x + DRONE_SIZE_OFFSET, top: pos.y + DRONE_SIZE_OFFSET }}
-            />
-          ))}
-
-          <svg className="path-svg">
-            {attackPhase >= AttackPhase.HIJACKED && !trustNeutralized && (
-              <line
-                x1={drone.x + DRONE_SIZE_OFFSET}
-                y1={drone.y + DRONE_SIZE_OFFSET}
-                x2={radioTower.x}
-                y2={radioTower.y}
-                className="spoofing-signal"
+        {/* 3D Canvas */}
+        <div className="sim-canvas-container" style={{ height: "600px", borderRadius: "var(--radius)", overflow: "hidden" }}>
+          <Canvas camera={{ position: [0, 10, 12], fov: 50 }} style={{ width: "100%", height: "100%" }} gl={{ antialias: true }}>
+            <Suspense fallback={null}>
+              <InjectionScene
+                drone={drone}
+                reportedDrone={reportedDrone}
+                dronePath={dronePath}
+                reportedPath={reportedPath}
+                waypoints={waypoints}
+                radioTower={radioTower}
+                maliciousTarget={maliciousTarget}
+                attackPhase={attackPhase}
+                dataPackets={dataPackets}
+                finalPositions={finalPositions}
+                trustNeutralized={trustNeutralized}
               />
-            )}
-            <polyline points={reportedPath.map(p => `${p.x + DRONE_SIZE_OFFSET},${p.y + DRONE_SIZE_OFFSET}`).join(' ')} className="spoofed-path" />
-            <polyline points={dronePath.map(p => `${p.x + DRONE_SIZE_OFFSET},${p.y + DRONE_SIZE_OFFSET}`).join(' ')} className="actual-path" />
-          </svg>
+            </Suspense>
+          </Canvas>
         </div>
       </div>
 
